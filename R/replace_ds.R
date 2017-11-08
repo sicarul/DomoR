@@ -1,7 +1,6 @@
 #' Replace a data source from a data.frame
 #'
 #' @importFrom foreach %do%
-#' @importFrom future %<-%
 #' @param id A GUID corresponding to the datasource ID from Domo.
 #' @param data A data.frame from which to create a data source.
 #' @param ... Additional curl and httr parameters
@@ -56,10 +55,9 @@ replace_ds <- function(data_source_id,data,...) {
         end = total_rows
       }
       data_frag <- data[start:end,]
-      v %<-% {uploadPartStr (stream_id, exec_id, i, data_frag) }
-      promises=c(promises,future::futureOf(v))
+      promises=c(promises,uploadPartStr (stream_id, exec_id, i, data_frag))
   }
-  future::resolve(promises)
+  lapply(promises, future::resolve)
   result <- commitStream(stream_id, exec_id)
 }
 
@@ -88,10 +86,12 @@ uploadPartStr <- function (stream_id, exec_id, part, data) {
   b <- readBin(f <- file(FNAME, "rb"), "raw", n=size)
   close(f)
 
-  result <- httr::PUT(put_url, body=b, all.headers, .domo_env$config)
-  unlink(FNAME)
-  json_result <- httr::content(result)
-  stopifnot(json_result$status == 200)
+  return(future::future({
+    result = httr::PUT(put_url, body=b, all.headers, .domo_env$config)
+    unlink(FNAME)
+    json_result <- httr::content(result)
+    return(json_result$status)
+  }))
 }
 
 commitStream <- function(stream_id, exec_id) {
