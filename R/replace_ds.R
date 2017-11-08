@@ -44,8 +44,6 @@ replace_ds <- function(data_source_id,data,...) {
   CHUNKSZ <- estimate_rows(data)
   fullChunks = ceiling((total_rows ) / CHUNKSZ)+1
 
-  #Process many at once
-  future::plan(future::multisession)
   promises = c()
 
   foreach::foreach(i=0:(fullChunks-1)) %do% {
@@ -70,23 +68,26 @@ estimate_rows <- function (data, kbytes = 10000) {
 }
 
 uploadPartStr <- function (stream_id, exec_id, part, data) {
-  FNAME <- tempfile(pattern="domo", fileext=".gz")
 
-  put_url <- paste0(.domo_env$customer.url, "/api/data/v1/streams/", stream_id, "/executions/", exec_id, "/part/", part)
 
-  all.headers <- httr::add_headers(c(.domo_env$auth.token, .domo_env$user.agent,
-                                     'Content-Type'='text/csv', 'Content-Encoding'='gzip'))
-
-  z <- gzfile(FNAME, "wb")
-
-  write.table(data, file=z, col.names=FALSE, row.names=FALSE, sep=',', na='\\N', qmethod="double")
-  close(z)
-
-  size <- file.info(FNAME)$size
-  b <- readBin(f <- file(FNAME, "rb"), "raw", n=size)
-  close(f)
-
+  future::plan(future::multisession)
   return(future::future({
+    FNAME <- tempfile(pattern="domo", fileext=".gz")
+
+    put_url <- paste0(.domo_env$customer.url, "/api/data/v1/streams/", stream_id, "/executions/", exec_id, "/part/", part)
+
+    all.headers <- httr::add_headers(c(.domo_env$auth.token, .domo_env$user.agent,
+                                       'Content-Type'='text/csv', 'Content-Encoding'='gzip'))
+
+    z <- gzfile(FNAME, "wb")
+
+    write.table(data, file=z, col.names=FALSE, row.names=FALSE, sep=',', na='\\N', qmethod="double")
+    close(z)
+
+    size <- file.info(FNAME)$size
+    b <- readBin(f <- file(FNAME, "rb"), "raw", n=size)
+    close(f)
+
     result = httr::PUT(put_url, body=b, all.headers, .domo_env$config)
     unlink(FNAME)
     json_result <- httr::content(result)
