@@ -70,7 +70,7 @@ estimate_rows <- function (data, kbytes = 10000) {
 uploadPartStr <- function (stream_id, exec_id, part, data) {
 
 
-  future::plan(future::multisession)
+  future::plan(future::multiprocess)
   return(future::future({
     FNAME <- tempfile(pattern="domo", fileext=".gz")
 
