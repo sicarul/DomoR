@@ -17,3 +17,7 @@ Imports:
     jsonlite,
     pryr,
     dplyr
+Depends:
+    foreach,
+    future
+RoxygenNote: 6.0.1

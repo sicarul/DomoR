@@ -1,5 +1,7 @@
 #' Replace a data source from a data.frame
 #'
+#' @importFrom foreach %do%
+#' @importFrom future %<-%
 #' @param id A GUID corresponding to the datasource ID from Domo.
 #' @param data A data.frame from which to create a data source.
 #' @param ... Additional curl and httr parameters
@@ -40,26 +42,24 @@ replace_ds <- function(data_source_id,data,...) {
   exec_id <- start_execution(stream_id)
 
   total_rows <- nrow(data)
-
   CHUNKSZ <- estimate_rows(data)
-  start <- 1
-  end <- total_rows
-  part <- 1
-  repeat {
-    if (total_rows - end > CHUNKSZ) {
-      end <- start + CHUNKSZ
-    } else {
-      end <- total_rows
-    }
-    data_frag <- data[start:end,]
-    #uploadPart (id, uploadId, part, data_frag)
-    uploadPartStr (stream_id, exec_id, part, data_frag)
-    part <- part + 1
-    start <- end + 1
-    if (start >= total_rows)
-      break
-  }
+  fullChunks = ceiling((total_rows ) / CHUNKSZ)+1
 
+  #Process many at once
+  future::plan(future::multisession)
+  promises = c()
+
+  foreach::foreach(i=0:(fullChunks-1)) %do% {
+      start=i*CHUNKSZ
+      end=((i+1)*CHUNKSZ)-1
+      if(end > total_rows){
+        end = total_rows
+      }
+      data_frag <- data[start:end,]
+      v %<-% {uploadPartStr (stream_id, exec_id, i, data_frag) }
+      promises=c(promises,future::futureOf(v))
+  }
+  future::resolve(promises)
   result <- commitStream(stream_id, exec_id)
 }
 
